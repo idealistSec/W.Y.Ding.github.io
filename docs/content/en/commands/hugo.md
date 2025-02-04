@@ -33,7 +33,6 @@ hugo [flags]
       --config string              config file (default is hugo.yaml|json|toml)
       --configDir string           config dir (default "config")
   -c, --contentDir string          filesystem path to content directory
-      --debug                      debug output
   -d, --destination string         filesystem path to write files to
       --disableKinds strings       disable different kind of pages (home, RSS etc.)
       --enableGitInfo              add Git revision, date, author, and CODEOWNERS info to the pages
@@ -64,7 +63,6 @@ hugo [flags]
   -t, --theme strings              themes to use (located in /themes/THEMENAME/)
       --themesDir string           filesystem path to themes directory
       --trace file                 write trace to file (not useful in general)
-  -v, --verbose                    verbose output
   -w, --watch                      watch filesystem for changes and recreate as needed
 ```
 
@@ -74,7 +72,6 @@ hugo [flags]
 * [hugo completion](/commands/hugo_completion/)	 - Generate the autocompletion script for the specified shell
 * [hugo config](/commands/hugo_config/)	 - Display site configuration
 * [hugo convert](/commands/hugo_convert/)	 - Convert front matter to another format
-* [hugo deploy](/commands/hugo_deploy/)	 - Deploy your site to a cloud provider
 * [hugo env](/commands/hugo_env/)	 - Display version and environment info
 * [hugo gen](/commands/hugo_gen/)	 - Generate documentation and syntax highlighting styles
 * [hugo import](/commands/hugo_import/)	 - Import a site from another system

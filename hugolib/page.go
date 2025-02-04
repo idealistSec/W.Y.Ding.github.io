@@ -143,6 +143,10 @@ func (p *pageState) GetDependencyManagerForScope(scope int) identity.Manager {
 	}
 }
 
+func (p *pageState) GetDependencyManagerForScopesAll() []identity.Manager {
+	return []identity.Manager{p.dependencyManager, p.dependencyManagerOutput}
+}
+
 func (p *pageState) Key() string {
 	return "page-" + strconv.FormatUint(p.pid, 10)
 }
@@ -179,10 +183,6 @@ func (po *pageState) isRenderedAny() bool {
 
 func (p *pageState) isContentNodeBranch() bool {
 	return p.IsNode()
-}
-
-func (p *pageState) Err() resource.ResourceError {
-	return nil
 }
 
 // Eq returns whether the current page equals the given page.

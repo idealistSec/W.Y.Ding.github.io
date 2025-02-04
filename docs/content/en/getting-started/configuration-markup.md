@@ -6,8 +6,8 @@ keywords: [markup,markdown,goldmark,asciidoc,asciidoctor,highlighting]
 menu:
   docs:
     parent: getting-started
-    weight: 50
-weight: 50
+    weight: 60
+weight: 60
 slug: configuration-markup
 toc: true
 ---
@@ -21,7 +21,7 @@ Hugo uses [Goldmark] to render Markdown to HTML.
 defaultMarkdownHandler = 'goldmark'
 {{< /code-toggle >}}
 
-Files with the `.md` or `.markdown` extension are processed as Markdown, provided that you have not specified a different [content format] using the `markup` field in front matter.
+Files with a `.md`, `.mdown`, or `.markdown` extension are processed as Markdown, provided that you have not specified a different [content format] using the `markup` field in front matter.
 
 To use a different renderer for Markdown files, specify one of `asciidocext`, `org`, `pandoc`, or `rst` in your site configuration.
 
@@ -36,7 +36,7 @@ defaultMarkdownHandler|Description
 To use AsciiDoc, Pandoc, or reStructuredText you must install the relevant renderer and update your [security policy].
 
 {{% note %}}
-Unless you need a unique capability provided by one of the alternate Markdown handlers, we strongly recommend that you use the default setting. Goldmark is fast, well maintained, conforms to the [CommonMark] specification, and is compatible with [GitHub Flavored Markdown] (GFM).
+Unless you need a unique capability provided by one of the alternative Markdown handlers, we strongly recommend that you use the default setting. Goldmark is fast, well maintained, conforms to the [CommonMark] specification, and is compatible with [GitHub Flavored Markdown] (GFM).
 
 [commonmark]: https://spec.commonmark.org/0.30/
 [github flavored markdown]: https://github.github.com/gfm/
@@ -107,7 +107,7 @@ Superscript|`1^st^`|`1<sup>st</sup>`
 To avoid a conflict when enabling the Hugo Goldmark Extras subscript extension, if you want to render subscript and strikethrough text concurrently you must:
 
 1. Disable the Goldmark strikethrough extension
-2. Enable the Hugo Goldmark Extras delete extension
+1. Enable the Hugo Goldmark Extras delete extension
 
 For example:
 
@@ -126,7 +126,7 @@ enable = true
 
 {{< new-in 0.122.0 >}}
 
-Enable the passthrough extension to include mathematical equations and expressions in Markdown using LaTeX or TeX typesetting syntax. See [mathematics in Markdown] for details.
+Enable the passthrough extension to include mathematical equations and expressions in Markdown using LaTeX markup. See [mathematics in Markdown] for details.
 
 [mathematics in Markdown]: content-management/mathematics/
 

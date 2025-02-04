@@ -1,5 +1,5 @@
 ---
-# Do not remove front matter.
+_comment: Do not remove front matter.
 ---
 
 Before we can use a `Taxonomy` method, we need to capture a `Taxonomy` object.
@@ -58,7 +58,6 @@ Although the [`Alphabetical`] and [`ByCount`] methods provide a better data stru
 ```
 
 In the example above, the first anchor element is a link to the term page.
-
 
 [`Alphabetical`]: /methods/taxonomy/alphabetical/
 [`ByCount`]: /methods/taxonomy/bycount/

@@ -114,9 +114,9 @@ type PageConfig struct {
 	Content Source
 
 	// Compiled values.
-	CascadeCompiled      map[page.PageMatcher]maps.Params
-	ContentMediaType     media.Type `mapstructure:"-" json:"-"`
-	IsFromContentAdapter bool       `mapstructure:"-" json:"-"`
+	CascadeCompiled      *maps.Ordered[page.PageMatcher, maps.Params] `mapstructure:"-" json:"-"`
+	ContentMediaType     media.Type                                   `mapstructure:"-" json:"-"`
+	IsFromContentAdapter bool                                         `mapstructure:"-" json:"-"`
 }
 
 var DefaultPageConfig = PageConfig{
@@ -158,8 +158,11 @@ func (p *PageConfig) Compile(basePath string, pagesFromData bool, ext string, lo
 
 	if p.Params == nil {
 		p.Params = make(maps.Params)
+	} else if pagesFromData {
+		p.Params = maps.PrepareParamsClone(p.Params)
+	} else {
+		maps.PrepareParams(p.Params)
 	}
-	maps.PrepareParams(p.Params)
 
 	if p.Content.Markup == "" && p.Content.MediaType == "" {
 		if ext == "" {

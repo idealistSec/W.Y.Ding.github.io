@@ -20,13 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/gohugoio/hugo/common/collections"
-	"github.com/gohugoio/hugo/common/hugo"
 	"github.com/gohugoio/hugo/common/maps"
 	"github.com/gohugoio/hugo/common/types"
 	"github.com/gohugoio/hugo/deps"
@@ -187,54 +185,6 @@ func (ns *Namespace) Dictionary(values ...any) (map[string]any, error) {
 	}
 
 	return root, nil
-}
-
-// EchoParam returns the value in the collection c with key k if is set; otherwise, it returns an
-// empty string.
-// Deprecated: Use the index function instead.
-func (ns *Namespace) EchoParam(c, k any) any {
-	hugo.Deprecate("collections.EchoParam", "Use the index function instead.", "v0.120.0")
-	av, isNil := indirect(reflect.ValueOf(c))
-	if isNil {
-		return ""
-	}
-
-	var avv reflect.Value
-	switch av.Kind() {
-	case reflect.Array, reflect.Slice:
-		index, ok := k.(int)
-		if ok && av.Len() > index {
-			avv = av.Index(index)
-		}
-	case reflect.Map:
-		kv := reflect.ValueOf(k)
-		if kv.Type().AssignableTo(av.Type().Key()) {
-			avv = av.MapIndex(kv)
-		}
-	}
-
-	avv, isNil = indirect(avv)
-
-	if isNil {
-		return ""
-	}
-
-	if avv.IsValid() {
-		switch avv.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return avv.Int()
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return avv.Uint()
-		case reflect.Float32, reflect.Float64:
-			return avv.Float()
-		case reflect.String:
-			return avv.String()
-		case reflect.Bool:
-			return avv.Bool()
-		}
-	}
-
-	return ""
 }
 
 // First returns the first limit items in list l.
@@ -430,47 +380,6 @@ func (ns *Namespace) Last(limit any, l any) (any, error) {
 	}
 
 	return seqv.Slice(seqv.Len()-limitv, seqv.Len()).Interface(), nil
-}
-
-// Querify encodes the given params in URL-encoded form ("bar=baz&foo=quux") sorted by key.
-func (ns *Namespace) Querify(params ...any) (string, error) {
-	qs := url.Values{}
-
-	if len(params) == 1 {
-		switch v := params[0].(type) {
-		case []string:
-			if len(v)%2 != 0 {
-				return "", errors.New("invalid query")
-			}
-
-			for i := 0; i < len(v); i += 2 {
-				qs.Add(v[i], v[i+1])
-			}
-
-			return qs.Encode(), nil
-
-		case []any:
-			params = v
-
-		default:
-			return "", errors.New("query keys must be strings")
-		}
-	}
-
-	if len(params)%2 != 0 {
-		return "", errors.New("invalid query")
-	}
-
-	for i := 0; i < len(params); i += 2 {
-		switch v := params[i].(type) {
-		case string:
-			qs.Add(v, fmt.Sprintf("%v", params[i+1]))
-		default:
-			return "", errors.New("query keys must be strings")
-		}
-	}
-
-	return qs.Encode(), nil
 }
 
 // Reverse creates a copy of the list l and reverses it.

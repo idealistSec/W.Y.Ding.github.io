@@ -51,14 +51,6 @@ type AlternativeOutputFormatsProvider interface {
 	AlternativeOutputFormats() OutputFormats
 }
 
-// AuthorProvider provides author information.
-type AuthorProvider interface {
-	// Deprecated: Use taxonomies instead.
-	Author() Author
-	// Deprecated: Use taxonomies instead.
-	Authors() AuthorList
-}
-
 // ChildCareProvider provides accessors to child resources.
 type ChildCareProvider interface {
 	// Pages returns a list of pages of all kinds.
@@ -71,8 +63,7 @@ type ChildCareProvider interface {
 	// section.
 	RegularPagesRecursive() Pages
 
-	// Resources returns a list of all resources.
-	Resources() resource.Resources
+	resource.ResourcesProvider
 }
 
 type MarkupProvider interface {
@@ -308,9 +299,6 @@ type PageWithoutContent interface {
 	PaginatorProvider
 	Positioner
 	navigation.PageMenusProvider
-
-	// TODO(bep)
-	AuthorProvider
 
 	// Page lookups/refs
 	GetPageProvider

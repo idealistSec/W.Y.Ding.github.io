@@ -7,7 +7,7 @@ action:
   aliases: [dict]
   related:
     - functions/collections/Slice
-  returnType: mapany
+  returnType: map[string]any
   signatures: ['collections.Dictionary [VALUE...]']
 aliases: [/functions/dict]
 ---
@@ -32,7 +32,6 @@ To create an empty map:
 ```go-html-template
 {{ $m := dict }}
 ```
-
 
 Note that the `key` can be either a `string` or a `string slice`. The latter is useful to create a deeply nested structure, e.g.:
 

@@ -52,6 +52,10 @@ var (
 	_ identity.IdentityGroupProvider     = (*resourceAdapterInner)(nil)
 	_ resource.Source                    = (*resourceAdapter)(nil)
 	_ resource.Identifier                = (*resourceAdapter)(nil)
+	_ resource.TransientIdentifier       = (*resourceAdapter)(nil)
+	_ targetPathProvider                 = (*resourceAdapter)(nil)
+	_ sourcePathProvider                 = (*resourceAdapter)(nil)
+	_ resource.Identifier                = (*resourceAdapter)(nil)
 	_ resource.ResourceNameTitleProvider = (*resourceAdapter)(nil)
 	_ resource.WithResourceMetaProvider  = (*resourceAdapter)(nil)
 	_ identity.DependencyManagerProvider = (*resourceAdapter)(nil)
@@ -188,10 +192,6 @@ func (r *resourceAdapter) Content(ctx context.Context) (any, error) {
 	return r.target.Content(ctx)
 }
 
-func (r *resourceAdapter) Err() resource.ResourceError {
-	return nil
-}
-
 func (r *resourceAdapter) GetIdentity() identity.Identity {
 	return identity.FirstIdentity(r.target)
 }
@@ -275,6 +275,23 @@ func (r *resourceAdapter) Colors() ([]images.Color, error) {
 func (r *resourceAdapter) Key() string {
 	r.init(false, false)
 	return r.target.(resource.Identifier).Key()
+}
+
+func (r *resourceAdapter) TransientKey() string {
+	return r.Key()
+}
+
+func (r *resourceAdapter) targetPath() string {
+	r.init(false, false)
+	return r.target.(targetPathProvider).targetPath()
+}
+
+func (r *resourceAdapter) sourcePath() string {
+	r.init(false, false)
+	if sp, ok := r.target.(sourcePathProvider); ok {
+		return sp.sourcePath()
+	}
+	return ""
 }
 
 func (r *resourceAdapter) MediaType() media.Type {
@@ -371,7 +388,6 @@ func (r *resourceAdapter) getImageOps() images.ImageResourceOps {
 		if r.MediaType().SubType == "svg" {
 			panic("this method is only available for raster images. To determine if an image is SVG, you can do {{ if eq .MediaType.SubType \"svg\" }}{{ end }}")
 		}
-		fmt.Println(r.MediaType().SubType)
 		panic("this method is only available for image resources")
 	}
 	r.init(false, false)

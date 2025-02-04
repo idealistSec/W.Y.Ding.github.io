@@ -119,7 +119,7 @@ docs/p1/sub/mymixcasetext2.txt
 		"RelPermalink: /docs/p1/sub/mymixcasetext2.txt|Name: sub/mymixcasetext2.txt|",
 		"RelPermalink: /mydata.yaml|Name: sub/data1.yaml|Title: Sub data|Params: map[]|",
 		"Featured Image: /a/pixel.png|featured.png|",
-		"Resized Featured Image: /a/pixel_hu16809842526914527184.png|10|",
+		"Resized Featured Image: /a/pixel_hu_a32b3e361d55df1.png|10|",
 		// Resource from string
 		"RelPermalink: /docs/p1/mytext.txt|Name: textresource|Title: My Text Resource|Params: map[param1:param1v]|",
 		// Dates
@@ -677,4 +677,34 @@ summary: {{ .Summary }}|content: {{ .Content}}
 	b.AssertFileContent("public/s1/p1/index.html",
 		"<p>aaa</p>|content: <p>aaa</p>\n<p>bbb</p>",
 	)
+}
+
+// Issue 13063.
+func TestPagesFromGoTmplTermIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	files := `
+-- hugo.toml --
+baseURL = "https://example.com"
+disableKinds = ['section', 'home', 'rss','sitemap']
+printPathWarnings = true
+[taxonomies]
+tag = "tags"
+-- content/mypost.md --
+---
+title: "My Post"
+tags: ["mytag"]
+---
+-- content/tags/_content.gotmpl --
+{{ .AddPage (dict "path" "mothertag" "title" "My title" "kind" "term") }}
+--
+-- layouts/_default/taxonomy.html --
+Terms: {{ range .Data.Terms.ByCount }}{{ .Name }}: {{ .Count }}|{{ end }}§s
+-- layouts/_default/single.html --
+Single.
+`
+
+	b := hugolib.Test(t, files, hugolib.TestOptWarn())
+
+	b.AssertFileContent("public/tags/index.html", "Terms: mytag: 1|§s")
 }

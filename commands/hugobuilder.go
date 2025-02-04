@@ -62,7 +62,7 @@ type hugoBuilder struct {
 
 	// Currently only set when in "fast render mode".
 	changeDetector *fileChangeDetector
-	visitedURLs    *types.EvictingStringQueue
+	visitedURLs    *types.EvictingQueue[string]
 
 	fullRebuildSem *semaphore.Weighted
 	debounce       func(f func())
@@ -920,7 +920,11 @@ func (c *hugoBuilder) handleEvents(watcher *watcher.Batcher,
 
 			changed := c.changeDetector.changed()
 			if c.changeDetector != nil {
-				lrl.Logf("build changed %d files", len(changed))
+				if len(changed) >= 10 {
+					lrl.Logf("build changed %d files", len(changed))
+				} else {
+					lrl.Logf("build changed %d files: %q", len(changed), changed)
+				}
 				if len(changed) == 0 {
 					// Nothing has changed.
 					return
@@ -966,7 +970,7 @@ func (c *hugoBuilder) handleEvents(watcher *watcher.Batcher,
 					pathToRefresh := h.PathSpec.RelURL(paths.ToSlashTrimLeading(otherChanges[0]), false)
 					lrl.Logf("refreshing %q", pathToRefresh)
 					livereload.RefreshPath(pathToRefresh)
-				} else if len(cssChanges) == 0 {
+				} else if len(cssChanges) == 0 || len(otherChanges) > 1 {
 					lrl.Logf("force refresh")
 					livereload.ForceRefresh()
 				}
@@ -1099,7 +1103,7 @@ func (c *hugoBuilder) rebuildSites(events []fsnotify.Event) (err error) {
 	if err != nil {
 		return
 	}
-	err = h.Build(hugolib.BuildCfg{NoBuildLock: true, RecentlyVisited: c.visitedURLs, ErrRecovery: c.errState.wasErr()}, events...)
+	err = h.Build(hugolib.BuildCfg{NoBuildLock: true, RecentlyTouched: c.visitedURLs, ErrRecovery: c.errState.wasErr()}, events...)
 	return
 }
 
@@ -1115,7 +1119,7 @@ func (c *hugoBuilder) rebuildSitesForChanges(ids []identity.Identity) (err error
 	}
 	whatChanged := &hugolib.WhatChanged{}
 	whatChanged.Add(ids...)
-	err = h.Build(hugolib.BuildCfg{NoBuildLock: true, WhatChanged: whatChanged, RecentlyVisited: c.visitedURLs, ErrRecovery: c.errState.wasErr()})
+	err = h.Build(hugolib.BuildCfg{NoBuildLock: true, WhatChanged: whatChanged, RecentlyTouched: c.visitedURLs, ErrRecovery: c.errState.wasErr()})
 
 	return
 }

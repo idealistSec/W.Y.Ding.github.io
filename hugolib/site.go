@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"mime"
 	"net/url"
@@ -43,6 +42,7 @@ import (
 	"github.com/gohugoio/hugo/deps"
 	"github.com/gohugoio/hugo/hugolib/doctree"
 	"github.com/gohugoio/hugo/hugolib/pagesfromdata"
+	"github.com/gohugoio/hugo/internal/js/esbuild"
 	"github.com/gohugoio/hugo/internal/warpc"
 	"github.com/gohugoio/hugo/langs/i18n"
 	"github.com/gohugoio/hugo/modules"
@@ -146,8 +146,11 @@ func NewHugoSites(cfg deps.DepsCfg) (*HugoSites, error) {
 		if cfg.Configs.Base.PanicOnWarning {
 			logHookLast = loggers.PanicOnWarningHook
 		}
-		if cfg.LogOut == nil {
-			cfg.LogOut = os.Stdout
+		if cfg.StdOut == nil {
+			cfg.StdOut = os.Stdout
+		}
+		if cfg.StdErr == nil {
+			cfg.StdErr = os.Stderr
 		}
 		if cfg.LogLevel == 0 {
 			cfg.LogLevel = logg.LevelWarn
@@ -157,8 +160,8 @@ func NewHugoSites(cfg deps.DepsCfg) (*HugoSites, error) {
 			Level:              cfg.LogLevel,
 			DistinctLevel:      logg.LevelWarn, // This will drop duplicate log warning and errors.
 			HandlerPost:        logHookLast,
-			Stdout:             cfg.LogOut,
-			Stderr:             cfg.LogOut,
+			StdOut:             cfg.StdOut,
+			StdErr:             cfg.StdErr,
 			StoreErrors:        conf.Watching(),
 			SuppressStatements: conf.IgnoredLogs(),
 		}
@@ -202,6 +205,12 @@ func NewHugoSites(cfg deps.DepsCfg) (*HugoSites, error) {
 	if err := firstSiteDeps.Init(); err != nil {
 		return nil, err
 	}
+
+	batcherClient, err := esbuild.NewBatcherClient(firstSiteDeps)
+	if err != nil {
+		return nil, err
+	}
+	firstSiteDeps.JSBatcherClient = batcherClient
 
 	confm := cfg.Configs
 	if err := confm.Validate(logger); err != nil {
@@ -311,7 +320,6 @@ func NewHugoSites(cfg deps.DepsCfg) (*HugoSites, error) {
 		return li.Lang < lj.Lang
 	})
 
-	var err error
 	h, err = newHugoSites(cfg, firstSiteDeps, pageTrees, sites)
 	if err == nil && h == nil {
 		panic("hugo: newHugoSitesNew returned nil error and nil HugoSites")
@@ -412,12 +420,6 @@ func newHugoSites(cfg deps.DepsCfg, d *deps.Deps, pageTrees *pageTrees, sites []
 	return h, nil
 }
 
-// Deprecated: Use hugo.IsServer instead.
-func (s *Site) IsServer() bool {
-	hugo.Deprecate(".Site.IsServer", "Use hugo.IsServer instead.", "v0.120.0")
-	return s.conf.Internal.Running
-}
-
 // Returns the server port.
 func (s *Site) ServerPort() int {
 	return s.conf.C.BaseURL.Port()
@@ -430,13 +432,6 @@ func (s *Site) Title() string {
 
 func (s *Site) Copyright() string {
 	return s.conf.Copyright
-}
-
-// Deprecated: Use .Site.Home.OutputFormats.Get "rss" instead.
-func (s *Site) RSSLink() template.URL {
-	hugo.Deprecate(".Site.RSSLink", "Use the Output Format's Permalink method instead, e.g. .OutputFormats.Get \"RSS\".Permalink", "v0.114.0")
-	rssOutputFormat := s.home.OutputFormats().Get("rss")
-	return template.URL(rssOutputFormat.Permalink())
 }
 
 func (s *Site) Config() page.SiteConfig {
@@ -518,18 +513,6 @@ func (s *Site) Authors() page.AuthorList {
 func (s *Site) Social() map[string]string {
 	hugo.Deprecate(".Site.Social", "Implement taxonomy 'social' or use .Site.Params.Social instead.", "v0.124.0")
 	return s.conf.Social
-}
-
-// Deprecated: Use .Site.Config.Services.Disqus.Shortname instead.
-func (s *Site) DisqusShortname() string {
-	hugo.Deprecate(".Site.DisqusShortname", "Use .Site.Config.Services.Disqus.Shortname instead.", "v0.120.0")
-	return s.Config().Services.Disqus.Shortname
-}
-
-// Deprecated: Use .Site.Config.Services.GoogleAnalytics.ID instead.
-func (s *Site) GoogleAnalytics() string {
-	hugo.Deprecate(".Site.GoogleAnalytics", "Use .Site.Config.Services.GoogleAnalytics.ID instead.", "v0.120.0")
-	return s.Config().Services.GoogleAnalytics.ID
 }
 
 func (s *Site) Param(key any) (any, error) {
@@ -1241,6 +1224,8 @@ func (s *Site) assembleMenus() error {
 			// If page is still nill, we must make sure that we have a URL that considers baseURL etc.
 			if types.IsNil(me.Page) {
 				me.ConfiguredURL = s.createNodeMenuEntryURL(me.MenuConfig.URL)
+			} else {
+				navigation.SetPageValues(me, me.Page)
 			}
 
 			flat[twoD{name, me.KeyName()}] = me
@@ -1519,7 +1504,11 @@ func (s *Site) renderForTemplate(ctx context.Context, name, outputFormat string,
 	}
 
 	if err = s.Tmpl().ExecuteWithContext(ctx, templ, w, d); err != nil {
-		return fmt.Errorf("render of %q failed: %w", name, err)
+		filename := name
+		if p, ok := d.(*pageState); ok {
+			filename = p.String()
+		}
+		return fmt.Errorf("render of %q failed: %w", filename, err)
 	}
 	return
 }
@@ -1553,7 +1542,7 @@ func (s *Site) render(ctx *siteRenderContext) (err error) {
 		return err
 	}
 
-	if ctx.outIdx == 0 {
+	if ctx.outIdx == 0 && s.h.buildCounter.Load() == 0 {
 		// Note that even if disableAliases is set, the aliases themselves are
 		// preserved on page. The motivation with this is to be able to generate
 		// 301 redirects in a .htaccess file and similar using a custom output format.

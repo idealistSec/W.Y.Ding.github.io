@@ -169,11 +169,16 @@ func (r *hugoContextRenderer) getPage(w util.BufWriter) any {
 	return p
 }
 
+func (r *hugoContextRenderer) isHTMLComment(b []byte) bool {
+	return len(b) > 4 && b[0] == '<' && b[1] == '!' && b[2] == '-' && b[3] == '-'
+}
+
 // HTML rendering based on Goldmark implementation.
 func (r *hugoContextRenderer) renderHTMLBlock(
 	w util.BufWriter, source []byte, node ast.Node, entering bool,
 ) (ast.WalkStatus, error) {
 	n := node.(*ast.HTMLBlock)
+
 	if entering {
 		if r.Unsafe {
 			l := n.Lines().Len()
@@ -188,8 +193,12 @@ func (r *hugoContextRenderer) renderHTMLBlock(
 				r.Writer.SecureWrite(w, linev)
 			}
 		} else {
-			r.logRawHTMLEmittedWarn(w)
-			_, _ = w.WriteString("<!-- raw HTML omitted -->\n")
+			l := n.Lines().At(0)
+			v := l.Value(source)
+			if !r.isHTMLComment(v) {
+				r.logRawHTMLEmittedWarn(w)
+				_, _ = w.WriteString("<!-- raw HTML omitted -->\n")
+			}
 		}
 	} else {
 		if n.HasClosure() {
@@ -197,7 +206,11 @@ func (r *hugoContextRenderer) renderHTMLBlock(
 				closure := n.ClosureLine
 				r.Writer.SecureWrite(w, closure.Value(source))
 			} else {
-				_, _ = w.WriteString("<!-- raw HTML omitted -->\n")
+				l := n.Lines().At(0)
+				v := l.Value(source)
+				if !r.isHTMLComment(v) {
+					_, _ = w.WriteString("<!-- raw HTML omitted -->\n")
+				}
 			}
 		}
 	}
@@ -210,17 +223,21 @@ func (r *hugoContextRenderer) renderRawHTML(
 	if !entering {
 		return ast.WalkSkipChildren, nil
 	}
+	n := node.(*ast.RawHTML)
+	l := n.Segments.Len()
 	if r.Unsafe {
-		n := node.(*ast.RawHTML)
-		l := n.Segments.Len()
 		for i := 0; i < l; i++ {
 			segment := n.Segments.At(i)
 			_, _ = w.Write(segment.Value(source))
 		}
 		return ast.WalkSkipChildren, nil
 	}
-	r.logRawHTMLEmittedWarn(w)
-	_, _ = w.WriteString("<!-- raw HTML omitted -->")
+	segment := n.Segments.At(0)
+	v := segment.Value(source)
+	if !r.isHTMLComment(v) {
+		r.logRawHTMLEmittedWarn(w)
+		_, _ = w.WriteString("<!-- raw HTML omitted -->")
+	}
 	return ast.WalkSkipChildren, nil
 }
 
@@ -242,6 +259,39 @@ func (r *hugoContextRenderer) handleHugoContext(w util.BufWriter, source []byte,
 	return ast.WalkContinue, nil
 }
 
+type hugoContextTransformer struct{}
+
+var _ parser.ASTTransformer = (*hugoContextTransformer)(nil)
+
+func (a *hugoContextTransformer) Transform(n *ast.Document, reader text.Reader, pc parser.Context) {
+	ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		s := ast.WalkContinue
+		if !entering || n.Kind() != kindHugoContext {
+			return s, nil
+		}
+
+		if p, ok := n.Parent().(*ast.Paragraph); ok {
+			if p.ChildCount() == 1 {
+				// Avoid empty paragraphs.
+				p.Parent().ReplaceChild(p.Parent(), p, n)
+			} else {
+				if t, ok := n.PreviousSibling().(*ast.Text); ok {
+					// Remove the newline produced by the Hugo context markers.
+					if t.SoftLineBreak() {
+						if t.Segment.Len() == 0 {
+							p.RemoveChild(p, t)
+						} else {
+							t.SetSoftLineBreak(false)
+						}
+					}
+				}
+			}
+		}
+
+		return s, nil
+	})
+}
+
 type hugoContextExtension struct {
 	logger loggers.Logger
 }
@@ -251,6 +301,7 @@ func (a *hugoContextExtension) Extend(m goldmark.Markdown) {
 		parser.WithInlineParsers(
 			util.Prioritized(&hugoContextParser{}, 50),
 		),
+		parser.WithASTTransformers(util.Prioritized(&hugoContextTransformer{}, 10)),
 	)
 
 	m.Renderer().AddOptions(

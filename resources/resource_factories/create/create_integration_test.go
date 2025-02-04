@@ -31,18 +31,17 @@ func TestGetRemoteHead(t *testing.T) {
   [security.http]
     methods = ['(?i)GET|POST|HEAD']
     urls = ['.*gohugo\.io.*']
-
 -- layouts/index.html --
 {{ $url := "https://gohugo.io/img/hugo.png" }}
 {{ $opts := dict "method" "head" }}
-{{ with resources.GetRemote $url $opts }}
+{{ with try (resources.GetRemote $url $opts) }}
   {{ with .Err }}
     {{ errorf "Unable to get remote resource: %s" . }}
-  {{ else }}
+  {{ else with .Value }}
     Head Content: {{ .Content }}. Head Data: {{ .Data }}
-  {{ end }}
-{{ else }}
+  {{ else }}
   {{ errorf "Unable to get remote resource: %s" $url }}
+  {{ end }}
 {{ end }}
 `
 
@@ -57,7 +56,42 @@ func TestGetRemoteHead(t *testing.T) {
 
 	b.AssertFileContent("public/index.html",
 		"Head Content: .",
-		"Head Data: map[ContentLength:18210 ContentType:image/png Status:200 OK StatusCode:200 TransferEncoding:[]]",
+		"Head Data: map[ContentLength:18210 ContentType:image/png Headers:map[] Status:200 OK StatusCode:200 TransferEncoding:[]]",
+	)
+}
+
+func TestGetRemoteResponseHeaders(t *testing.T) {
+	files := `
+-- config.toml --
+[security]
+  [security.http]
+    methods = ['(?i)GET|POST|HEAD']
+    urls = ['.*gohugo\.io.*']
+-- layouts/index.html --
+{{ $url := "https://gohugo.io/img/hugo.png" }}
+{{ $opts := dict "method" "head" "responseHeaders" (slice "X-Frame-Options" "Server") }}
+{{ with try (resources.GetRemote $url $opts) }}
+  {{ with .Err }}
+    {{ errorf "Unable to get remote resource: %s" . }}
+  {{ else with .Value }}
+    Response Headers: {{ .Data.Headers }}
+  {{ else }}
+  {{ errorf "Unable to get remote resource: %s" $url }}
+  {{ end }}
+{{ end }}
+`
+
+	b := hugolib.NewIntegrationTestBuilder(
+		hugolib.IntegrationTestConfig{
+			T:           t,
+			TxtarString: files,
+		},
+	)
+
+	b.Build()
+
+	b.AssertFileContent("public/index.html",
+		"Response Headers: map[Server:[Netlify] X-Frame-Options:[DENY]]",
 	)
 }
 
@@ -90,14 +124,15 @@ mediaTypes = ['text/plain']
 -- layouts/_default/single.html --
 {{ $url := printf "%s%s" "URL" .RelPermalink}}
 {{ $opts := dict }}
-{{ with resources.GetRemote $url $opts }}
+{{ with try (resources.GetRemote $url $opts) }}
   {{ with .Err }}
-    {{ errorf "Got Err: %s. Data: %v" . .Data }}
-  {{ else }}
+     {{ errorf "Got Err: %s" . }}
+	 {{ with .Cause }}{{ errorf "Data: %s" .Data }}{{ end }}
+  {{ else with .Value }}
     Content: {{ .Content }}
+  {{ else }}
+    {{ errorf "Unable to get remote resource: %s" $url }}
   {{ end }}
-{{ else }}
-  {{ errorf "Unable to get remote resource: %s" $url }}
 {{ end }}
 `
 

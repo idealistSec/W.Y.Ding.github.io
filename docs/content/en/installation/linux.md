@@ -121,8 +121,7 @@ To install the extended edition of Hugo on [Exherbo]:
    www-apps/hugo extended
    ```
 
-2. Install using the Paludis package manager:
-
+1. Install using the Paludis package manager:
 
    ```sh
    cave resolve -x repository/heirecka
@@ -151,7 +150,7 @@ Derivatives of the [Gentoo] distribution of Linux include [Calculate Linux], [Fu
     www-apps/hugo extended
     ```
 
-2. Build using the Portage package manager:
+1. Build using the Portage package manager:
 
     ```sh
     sudo emerge www-apps/hugo
@@ -191,6 +190,16 @@ sudo eopkg install hugo
 ```
 
 [Solus]: https://getsol.us/
+
+### Void Linux
+
+To install the extended edition of Hugo on [Void Linux]:
+
+```sh
+sudo xbps-install -S hugo
+```
+
+[Void Linux]: https://voidlinux.org/
 
 {{% include "installation/_common/04-build-from-source.md" %}}
 

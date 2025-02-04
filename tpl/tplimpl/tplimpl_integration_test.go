@@ -585,18 +585,51 @@ title: p5
 	)
 }
 
-func TestCommentShortcode(t *testing.T) {
-	t.Parallel()
-
+// Issue 12963
+func TestEditBaseofParseAfterExecute(t *testing.T) {
 	files := `
 -- hugo.toml --
-disableKinds = ['page','rss','section','sitemap','taxonomy','term']
--- layouts/index.html --
+baseURL = "https://example.com"
+disableLiveReload = true
+disableKinds = ["taxonomy", "term", "rss", "404", "sitemap"]
+[internal]
+fastRenderMode = true
+-- layouts/_default/baseof.html --
+Baseof!
+{{ block "main" . }}default{{ end }}
+{{ with (templates.Defer (dict "key" "global")) }}
+Now. {{ now }}
+{{ end }}
+-- layouts/_default/single.html --
+{{ define "main" }}
+Single.
+{{ end }}
+-- layouts/_default/list.html --
+{{ define "main" }}
+List.
 {{ .Content }}
+{{ range .Pages }}{{ .Title }}{{ end }}|
+{{ end }}
+-- content/mybundle1/index.md --
+---
+title: "My Bundle 1"
+---
+-- content/mybundle2/index.md --
+---
+title: "My Bundle 2"
+---
 -- content/_index.md --
-a{{< comment >}}b{{< /comment >}}c
+---
+title: "Home"
+---
+Home!
 `
 
-	b := hugolib.Test(t, files)
-	b.AssertFileContent("public/index.html", "<p>ac</p>")
+	b := hugolib.TestRunning(t, files)
+	b.AssertFileContent("public/index.html", "Home!")
+	b.EditFileReplaceAll("layouts/_default/baseof.html", "Baseof", "Baseof!").Build()
+	b.BuildPartial("/")
+	b.AssertFileContent("public/index.html", "Baseof!!")
+	b.BuildPartial("/mybundle1/")
+	b.AssertFileContent("public/mybundle1/index.html", "Baseof!!")
 }

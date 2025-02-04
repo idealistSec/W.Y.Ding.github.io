@@ -4769,9 +4769,9 @@ h6:hover .header-link {
   margin: 0;
 }
 code {
-    padding: 0.2em;
+    padding: 2px 3px;
     margin: 0;
-    font-size: 85%;
+    font-size: 93.75%;
     background-color: rgba(27, 31, 35, .05);
     border-radius: 3px;
 }
@@ -5332,6 +5332,11 @@ h6:first-of-type {
 }
 h6 ~ p {
   margin: 0.5em 0 2em 0;
+}
+/* QR codes */
+img.qrcode {
+  width: auto;
+  width: initial;
 }
 .nested-blockquote blockquote {
   border-left: 4px solid #0594CB;

@@ -341,7 +341,23 @@ func (h *HugoSites) render(l logg.LevelLogger, config *BuildCfg) error {
 		loggers.TimeTrackf(l, start, h.buildCounters.loggFields(), "")
 	}()
 
-	siteRenderContext := &siteRenderContext{cfg: config, multihost: h.Configs.IsMultihost}
+	siteRenderContext := &siteRenderContext{cfg: config, infol: l, multihost: h.Configs.IsMultihost}
+
+	renderErr := func(err error) error {
+		if err == nil {
+			return nil
+		}
+		// In Hugo 0.141.0 we replaced the special error handling for resources.GetRemote
+		// with the more general try.
+		if strings.Contains(err.Error(), "can't evaluate field Err in type") {
+			if strings.Contains(err.Error(), "resource.Resource") {
+				return fmt.Errorf("%s: Resource.Err was removed in Hugo v0.141.0 and replaced with a new try keyword, see https://gohugo.io/functions/go-template/try/", err)
+			} else if strings.Contains(err.Error(), "template.HTML") {
+				return fmt.Errorf("%s: the return type of transform.ToMath was changed in Hugo v0.141.0 and the error handling replaced with a new try keyword, see https://gohugo.io/functions/go-template/try/", err)
+			}
+		}
+		return err
+	}
 
 	i := 0
 	for _, s := range h.Sites {
@@ -390,7 +406,7 @@ func (h *HugoSites) render(l logg.LevelLogger, config *BuildCfg) error {
 							}
 						} else {
 							if err := s.render(siteRenderContext); err != nil {
-								return err
+								return renderErr(err)
 							}
 						}
 						loggers.TimeTrackf(ll, start, nil, "")
@@ -496,6 +512,7 @@ func (s *Site) executeDeferredTemplates(de *deps.DeferredExecutions) error {
 				}
 
 				content = append(content[:low], append([]byte(deferred.Result), content[high:]...)...)
+				forward = len(deferred.Result)
 				changed = true
 
 				return nil
@@ -520,8 +537,9 @@ func (s *Site) executeDeferredTemplates(de *deps.DeferredExecutions) error {
 		},
 	})
 
-	de.FilenamesWithPostPrefix.ForEeach(func(filename string, _ bool) {
+	de.FilenamesWithPostPrefix.ForEeach(func(filename string, _ bool) bool {
 		g.Enqueue(filename)
+		return true
 	})
 
 	return g.Wait()
@@ -737,15 +755,15 @@ type pathChange struct {
 	// The path to the changed file.
 	p *paths.Path
 
-	// If true, this is a delete operation (a delete or a rename).
-	delete bool
+	// If true, this is a structural change (e.g. a delete or a rename).
+	structural bool
 
 	// If true, this is a directory.
 	isDir bool
 }
 
 func (p pathChange) isStructuralChange() bool {
-	return p.delete || p.isDir
+	return p.structural || p.isDir
 }
 
 func (h *HugoSites) processPartialRebuildChanges(ctx context.Context, l logg.LevelLogger, config *BuildCfg) error {
@@ -809,6 +827,11 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 		addedContentPaths []*paths.Path
 	)
 
+	var (
+		addedOrChangedContent []pathChange
+		changes               []identity.Identity
+	)
+
 	for _, ev := range eventInfos {
 		cpss := h.BaseFs.ResolvePaths(ev.Name)
 		pss := make([]*paths.Path, len(cpss))
@@ -835,6 +858,13 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 			if err == nil && g != nil {
 				cacheBusters = append(cacheBusters, g)
 			}
+
+			if ev.added {
+				changes = append(changes, identity.StructuralChangeAdd)
+			}
+			if ev.removed {
+				changes = append(changes, identity.StructuralChangeRemove)
+			}
 		}
 
 		if ev.removed {
@@ -845,11 +875,6 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 			changedPaths.changedFiles = append(changedPaths.changedFiles, pss...)
 		}
 	}
-
-	var (
-		addedOrChangedContent []pathChange
-		changes               []identity.Identity
-	)
 
 	// Find the most specific identity possible.
 	handleChange := func(pathInfo *paths.Path, delete, isDir bool) {
@@ -884,12 +909,12 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 
 			needsPagesAssemble = true
 
-			if config.RecentlyVisited != nil {
+			if config.RecentlyTouched != nil {
 				// Fast render mode. Adding them to the visited queue
 				// avoids rerendering them on navigation.
 				for _, id := range changes {
 					if p, ok := id.(page.Page); ok {
-						config.RecentlyVisited.Add(p.RelPermalink())
+						config.RecentlyTouched.Add(p.RelPermalink())
 					}
 				}
 			}
@@ -911,7 +936,7 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 				}
 			}
 
-			addedOrChangedContent = append(addedOrChangedContent, pathChange{p: pathInfo, delete: delete, isDir: isDir})
+			addedOrChangedContent = append(addedOrChangedContent, pathChange{p: pathInfo, structural: delete, isDir: isDir})
 
 		case files.ComponentFolderLayouts:
 			tmplChanged = true
@@ -1032,6 +1057,16 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 		handleChange(id, false, true)
 	}
 
+	for _, id := range changes {
+		if id == identity.GenghisKhan {
+			for i, cp := range addedOrChangedContent {
+				cp.structural = true
+				addedOrChangedContent[i] = cp
+			}
+			break
+		}
+	}
+
 	resourceFiles := h.fileEventsContentPaths(addedOrChangedContent)
 
 	changed := &WhatChanged{
@@ -1057,6 +1092,8 @@ func (h *HugoSites) processPartialFileEvents(ctx context.Context, l logg.LevelLo
 			return false
 		}
 	}
+
+	h.Deps.OnChangeListeners.Notify(changed.Changes()...)
 
 	if err := h.resolveAndClearStateForIdentities(ctx, l, cacheBusterOr, changed.Drain()); err != nil {
 		return err

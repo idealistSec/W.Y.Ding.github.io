@@ -25,9 +25,7 @@ import (
 	"sync"
 	"time"
 
-	godartsassv1 "github.com/bep/godartsass"
 	"github.com/bep/logg"
-	"github.com/mitchellh/mapstructure"
 
 	"github.com/bep/godartsass/v2"
 	"github.com/gohugoio/hugo/common/hcontext"
@@ -318,7 +316,7 @@ func GetDependencyListNonGo() []string {
 
 	if dartSass := dartSassVersion(); dartSass.ProtocolVersion != "" {
 		dartSassPath := "github.com/sass/dart-sass-embedded"
-		if IsDartSassV2() {
+		if IsDartSassGeV2() {
 			dartSassPath = "github.com/sass/dart-sass"
 		}
 		deps = append(deps,
@@ -365,22 +363,15 @@ type Dependency struct {
 }
 
 func dartSassVersion() godartsass.DartSassVersion {
-	if DartSassBinaryName == "" {
+	if DartSassBinaryName == "" || !IsDartSassGeV2() {
 		return godartsass.DartSassVersion{}
 	}
-	if IsDartSassV2() {
-		v, _ := godartsass.Version(DartSassBinaryName)
-		return v
-	}
-
-	v, _ := godartsassv1.Version(DartSassBinaryName)
-	var vv godartsass.DartSassVersion
-	mapstructure.WeakDecode(v, &vv)
-	return vv
+	v, _ := godartsass.Version(DartSassBinaryName)
+	return v
 }
 
 // DartSassBinaryName is the name of the Dart Sass binary to use.
-// TODO(beop) find a better place for this.
+// TODO(bep) find a better place for this.
 var DartSassBinaryName string
 
 func init() {
@@ -405,7 +396,10 @@ var (
 	dartSassBinaryNamesV2 = []string{"dart-sass", "sass"}
 )
 
-func IsDartSassV2() bool {
+// TODO(bep) we eventually want to remove this, but keep it for a while to throw an informative error.
+// We stopped supporting the old binary in Hugo 0.139.0.
+func IsDartSassGeV2() bool {
+	// dart-sass-embedded was the first version of the embedded Dart Sass before it was moved into the main project.
 	return !strings.Contains(DartSassBinaryName, "embedded")
 }
 
@@ -424,15 +418,15 @@ func Deprecate(item, alternative string, version string) {
 func DeprecateLevel(item, alternative, version string, level logg.Level) {
 	var msg string
 	if level == logg.LevelError {
-		msg = fmt.Sprintf("%s was deprecated in Hugo %s and will be removed in Hugo %s. %s", item, version, CurrentVersion.Next().ReleaseVersion(), alternative)
+		msg = fmt.Sprintf("%s was deprecated in Hugo %s and subsequently removed. %s", item, version, alternative)
 	} else {
 		msg = fmt.Sprintf("%s was deprecated in Hugo %s and will be removed in a future release. %s", item, version, alternative)
 	}
 
-	loggers.Log().Logger().WithLevel(level).WithField(loggers.FieldNameCmd, "deprecated").Logf(msg)
+	loggers.Log().Logger().WithLevel(level).WithField(loggers.FieldNameCmd, "deprecated").Logf("%s", msg)
 }
 
-// We ususally do about one minor version a month.
+// We usually do about one minor version a month.
 // We want people to run at least the current and previous version without any warnings.
 // We want people who don't update Hugo that often to see the warnings and errors before we remove the feature.
 func deprecationLogLevelFromVersion(ver string) logg.Level {
@@ -440,11 +434,11 @@ func deprecationLogLevelFromVersion(ver string) logg.Level {
 	to := CurrentVersion
 	minorDiff := to.Minor - from.Minor
 	switch {
-	case minorDiff >= 12:
-		// Start failing the build after about a year.
+	case minorDiff >= 15:
+		// Start failing the build after about 15 months.
 		return logg.LevelError
-	case minorDiff >= 6:
-		// Start printing warnings after about six months.
+	case minorDiff >= 3:
+		// Start printing warnings after about 3 months.
 		return logg.LevelWarn
 	default:
 		return logg.LevelInfo

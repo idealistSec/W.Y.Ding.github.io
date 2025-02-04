@@ -16,7 +16,7 @@ toc: true
 aliases: [/functions/transform.unmarshal]
 ---
 
-The input can be a string or a [resource].
+The input can be a string or a [resource](g).
 
 ## Unmarshal a string
 
@@ -37,7 +37,7 @@ Use the `transform.Unmarshal` function with global, page, and remote resources.
 
 ### Global resource
 
-A global resource is a file within the assets directory, or within any directory mounted to the assets directory.
+A global resource is a file within the `assets` directory, or within any directory mounted to the `assets` directory.
 
 ```text
 assets/
@@ -97,14 +97,14 @@ A remote resource is a file on a remote server, accessible via HTTP or HTTPS.
 ```go-html-template
 {{ $data := dict }}
 {{ $url := "https://example.org/books.json" }}
-{{ with resources.GetRemote $url }}
+{{ with try (resources.GetRemote $url) }}
   {{ with .Err }}
     {{ errorf "%s" . }}
-  {{ else }}
+  {{ else with .Value }}
     {{ $data = . | transform.Unmarshal }}
+  {{ else }}
+    {{ errorf "Unable to get remote resource %q" $url }}
   {{ end }}
-{{ else }}
-  {{ errorf "Unable to get remote resource %q" $url }}
 {{ end }}
 
 {{ range where $data "author" "Victor Hugo" }}
@@ -175,14 +175,14 @@ Get the remote data:
 ```go-html-template
 {{ $data := dict }}
 {{ $url := "https://example.org/books/index.xml" }}
-{{ with resources.GetRemote $url }}
+{{ with try (resources.GetRemote $url) }}
   {{ with .Err }}
     {{ errorf "%s" . }}
-  {{ else }}
+  {{ else with .Value }}
     {{ $data = . | transform.Unmarshal }}
+  {{ else }}
+    {{ errorf "Unable to get remote resource %q" $url }}
   {{ end }}
-{{ else }}
-  {{ errorf "Unable to get remote resource %q" $url }}
 {{ end }}
 ```
 
@@ -230,7 +230,7 @@ Let's add a `lang` attribute to the `title` nodes of our RSS feed, and a namespa
     <language>en-US</language>
     <atom:link href="https://example.org/books/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title lang="fr">The Hunchback of Notre Dame</title>
+      <title lang="en">The Hunchback of Notre Dame</title>
       <description>Written by Victor Hugo</description>
       <isbn:number>9780140443530</isbn:number>
       <link>https://example.org/books/the-hunchback-of-notre-dame/</link>
@@ -238,7 +238,7 @@ Let's add a `lang` attribute to the `title` nodes of our RSS feed, and a namespa
       <guid>https://example.org/books/the-hunchback-of-notre-dame/</guid>
     </item>
     <item>
-      <title lang="en">Les Misérables</title>
+      <title lang="fr">Les Misérables</title>
       <description>Written by Victor Hugo</description>
       <isbn:number>9780451419439</isbn:number>
       <link>https://example.org/books/les-miserables/</link>
@@ -266,12 +266,12 @@ Each item node looks like this:
   "pubDate": "Mon, 09 Oct 2023 09:27:12 -0700",
   "title": {
     "#text": "The Hunchback of Notre Dame",
-    "-lang": "fr"
+    "-lang": "en"
   }
 }
 ```
 
-The title keys do not begin with an underscore or a letter---they are not valid [identifiers]. Use the [`index`] function to access the values:
+The title keys do not begin with an underscore or a letter---they are not valid [identifiers](g). Use the [`index`] function to access the values:
 
 ```go-html-template
 {{ with $data.channel.item }}
@@ -290,12 +290,10 @@ Hugo renders this to:
 
 ```html
 <ul>
-  <li>The Hunchback of Notre Dame (fr) 9780140443530</li>
-  <li>Les Misérables (en) 9780451419439</li>
+  <li>The Hunchback of Notre Dame (en) 9780140443530</li>
+  <li>Les Misérables (fr) 9780451419439</li>
 </ul>
 ```
 
 [`index`]: /functions/collections/indexfunction/
-[identifiers]: https://go.dev/ref/spec#Identifiers
-[resource]: /getting-started/glossary/#resource
 [page bundle]: /content-management/page-bundles/
